@@ -5,6 +5,7 @@ namespace Modules\ClientManagement\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Order extends Model
 {
@@ -58,5 +59,24 @@ class Order extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class, 'client_id');
+    }
+
+    /**
+     * Order items (individual guest posts).
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class, 'order_id');
+    }
+
+    /**
+     * Recalculate totals from items.
+     */
+    public function recalculateTotals(): void
+    {
+        $this->total_client_price = (float)$this->items()->sum('client_price');
+        $this->total_vendor_cost = (float)$this->items()->sum('vendor_price');
+        $this->total_profit = $this->total_client_price - $this->total_vendor_cost;
+        $this->save();
     }
 }
