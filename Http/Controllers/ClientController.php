@@ -3,32 +3,45 @@
 namespace Modules\ClientManagement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Modules\ClientManagement\Models\Client;
-use Modules\ClientManagement\Http\Requests\StoreClientRequest;
-use Modules\ClientManagement\Http\Requests\UpdateClientRequest;
+use Modules\Shared\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Response;
 
 class ClientController extends Controller
 {
     /**
-     * Display a listing of clients.
+     * Render the Client Management Blade view.
+     */
+    public function renderView($viewFactory)
+    {
+        try {
+            $clients = Client::latest()->get()->toArray();
+        } catch (\Exception $e) {
+            $clients = [];
+        }
+
+        return $viewFactory->make('clients.index', [
+            'clients' => $clients
+        ]);
+    }
+
+    /**
+     * Display a listing of clients (API / JSON).
      */
     public function index(Request $request): JsonResponse
     {
         $query = Client::query();
 
-        if ($request->has('search')) {
+        if ($request && $request->has('search')) {
             $search = $request->get('search');
             $query->where('name', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%")
                   ->orWhere('company_name', 'like', "%{$search}%");
         }
 
-        $clients = $query->latest()->paginate(15);
+        $clients = $query->latest()->get();
 
-        return Response::json([
+        return response()->json([
             'status' => 'success',
             'data' => $clients
         ]);
@@ -37,56 +50,79 @@ class ClientController extends Controller
     /**
      * Store a newly created client.
      */
-    public function store(StoreClientRequest $request): JsonResponse
+    public function store(array $body): array
     {
-        $client = Client::create($request->validated());
+        if (empty(trim($body['name'] ?? ''))) {
+            http_response_code(422);
+            return ['status' => 'error', 'message' => 'Client Name is required.'];
+        }
 
-        return Response::json([
+        $client = Client::create([
+            'name' => trim($body['name']),
+            'email' => trim($body['email'] ?? null) ?: null,
+            'phone' => trim($body['phone'] ?? null) ?: null,
+            'company_name' => trim($body['company_name'] ?? null) ?: null,
+            'country' => trim($body['country'] ?? null) ?: null,
+            'notes' => trim($body['notes'] ?? null) ?: null,
+        ]);
+
+        return [
             'status' => 'success',
-            'message' => 'Client created successfully.',
+            'message' => 'Client added successfully!',
             'data' => $client
-        ], 201);
+        ];
     }
 
     /**
      * Display the specified client.
      */
-    public function show($id): JsonResponse
+    public function show($id): array
     {
         $client = Client::findOrFail($id);
-
-        return Response::json([
+        return [
             'status' => 'success',
             'data' => $client
-        ]);
+        ];
     }
 
     /**
      * Update the specified client.
      */
-    public function update(UpdateClientRequest $request, $id): JsonResponse
+    public function update($id, array $body): array
     {
-        $client = Client::findOrFail($id);
-        $client->update($request->validated());
+        if (empty(trim($body['name'] ?? ''))) {
+            http_response_code(422);
+            return ['status' => 'error', 'message' => 'Client Name is required.'];
+        }
 
-        return Response::json([
-            'status' => 'success',
-            'message' => 'Client updated successfully.',
-            'data' => $client
+        $client = Client::findOrFail($id);
+        $client->update([
+            'name' => trim($body['name']),
+            'email' => trim($body['email'] ?? null) ?: null,
+            'phone' => trim($body['phone'] ?? null) ?: null,
+            'company_name' => trim($body['company_name'] ?? null) ?: null,
+            'country' => trim($body['country'] ?? null) ?: null,
+            'notes' => trim($body['notes'] ?? null) ?: null,
         ]);
+
+        return [
+            'status' => 'success',
+            'message' => 'Client updated successfully!',
+            'data' => $client
+        ];
     }
 
     /**
      * Remove the specified client (Soft delete).
      */
-    public function destroy($id): JsonResponse
+    public function destroy($id): array
     {
         $client = Client::findOrFail($id);
         $client->delete();
 
-        return Response::json([
+        return [
             'status' => 'success',
-            'message' => 'Client soft-deleted successfully.'
-        ]);
+            'message' => 'Client deleted successfully.'
+        ];
     }
 }

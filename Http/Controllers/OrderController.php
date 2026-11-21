@@ -3,42 +3,44 @@
 namespace Modules\ClientManagement\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use Modules\ClientManagement\Models\Order;
-use Modules\ClientManagement\Http\Requests\StoreOrderRequest;
-use Modules\ClientManagement\Http\Requests\UpdateOrderRequest;
+use Modules\Shared\Models\Order;
+use Modules\Shared\Models\Client;
+use Modules\Shared\Models\Website;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Response;
 
 class OrderController extends Controller
 {
     /**
-     * Display a listing of guest post orders.
+     * Render the Orders Blade view.
+     */
+    public function renderView($viewFactory)
+    {
+        try {
+            $orders = Order::with(['client', 'items.website', 'items.vendor'])->latest('order_date')->get()->toArray();
+            $clients = Client::orderBy('name')->get()->toArray();
+            $websites = Website::with('vendor')->where('status', 'active')->orderBy('website_name')->get()->toArray();
+        } catch (\Exception $e) {
+            $orders = [];
+            $clients = [];
+            $websites = [];
+        }
+
+        return $viewFactory->make('orders.index', [
+            'orders' => $orders,
+            'clients' => $clients,
+            'websites' => $websites,
+        ]);
+    }
+
+    /**
+     * Display a listing of orders (API / JSON).
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Order::with('client');
+        $orders = Order::with('client')->latest('order_date')->get();
 
-        if ($request->has('search')) {
-            $search = $request->get('search');
-            $query->where('order_number', 'like', "%{$search}%")
-                  ->orWhereHas('client', function ($q) use ($search) {
-                      $q->where('name', 'like', "%{$search}%")
-                        ->orWhere('company_name', 'like', "%{$search}%");
-                  });
-        }
-
-        if ($request->has('status') && !empty($request->get('status'))) {
-            $query->where('status', $request->get('status'));
-        }
-
-        if ($request->has('client_id')) {
-            $query->where('client_id', $request->get('client_id'));
-        }
-
-        $orders = $query->latest('order_date')->paginate(15);
-
-        return Response::json([
+        return response()->json([
             'status' => 'success',
             'data' => $orders
         ]);
@@ -47,69 +49,90 @@ class OrderController extends Controller
     /**
      * Store a newly created order.
      */
-    public function store(StoreOrderRequest $request): JsonResponse
+    public function store(array $body): array
     {
-        $data = $request->validated();
-        $clientPrice = (float)$data['total_client_price'];
-        $vendorCost = (float)$data['total_vendor_cost'];
-        $data['total_profit'] = $clientPrice - $vendorCost;
+        if (empty($body['client_id']) || empty($body['order_date'])) {
+            http_response_code(422);
+            return ['status' => 'error', 'message' => 'Client and Order Date are required.'];
+        }
 
-        $order = Order::create($data);
+        $clientPrice = (float)($body['total_client_price'] ?? 0);
+        $vendorCost = (float)($body['total_vendor_cost'] ?? 0);
+        $totalProfit = $clientPrice - $vendorCost;
 
-        return Response::json([
+        $orderNumber = 'ORD-' . strtoupper(substr(uniqid(), -6));
+
+        $order = Order::create([
+            'order_number' => $orderNumber,
+            'client_id' => (int)$body['client_id'],
+            'order_date' => $body['order_date'],
+            'deadline' => !empty($body['deadline']) ? $body['deadline'] : null,
+            'total_client_price' => $clientPrice,
+            'total_vendor_cost' => $vendorCost,
+            'total_profit' => $totalProfit,
+            'status' => $body['status'] ?? 'pending',
+            'notes' => trim($body['notes'] ?? null) ?: null,
+        ]);
+
+        return [
             'status' => 'success',
-            'message' => 'Order created successfully.',
+            'message' => 'Order created successfully!',
             'data' => $order->load('client')
-        ], 201);
+        ];
     }
 
     /**
      * Display the specified order.
      */
-    public function show($id): JsonResponse
+    public function show($id): array
     {
-        $order = Order::with('client')->findOrFail($id);
-
-        return Response::json([
+        $order = Order::with(['client', 'items.website', 'items.vendor'])->findOrFail($id);
+        return [
             'status' => 'success',
             'data' => $order
-        ]);
+        ];
     }
 
     /**
      * Update the specified order.
      */
-    public function update(UpdateOrderRequest $request, $id): JsonResponse
+    public function update($id, array $body): array
     {
         $order = Order::findOrFail($id);
-        $data = $request->validated();
 
-        if (isset($data['total_client_price']) || isset($data['total_vendor_cost'])) {
-            $clientPrice = (float)($data['total_client_price'] ?? $order->total_client_price);
-            $vendorCost = (float)($data['total_vendor_cost'] ?? $order->total_vendor_cost);
-            $data['total_profit'] = $clientPrice - $vendorCost;
-        }
+        $clientPrice = isset($body['total_client_price']) ? (float)$body['total_client_price'] : $order->total_client_price;
+        $vendorCost = isset($body['total_vendor_cost']) ? (float)$body['total_vendor_cost'] : $order->total_vendor_cost;
+        $totalProfit = $clientPrice - $vendorCost;
 
-        $order->update($data);
-
-        return Response::json([
-            'status' => 'success',
-            'message' => 'Order updated successfully.',
-            'data' => $order->load('client')
+        $order->update([
+            'client_id' => !empty($body['client_id']) ? (int)$body['client_id'] : $order->client_id,
+            'order_date' => !empty($body['order_date']) ? $body['order_date'] : $order->order_date,
+            'deadline' => array_key_exists('deadline', $body) ? ($body['deadline'] ?: null) : $order->deadline,
+            'total_client_price' => $clientPrice,
+            'total_vendor_cost' => $vendorCost,
+            'total_profit' => $totalProfit,
+            'status' => $body['status'] ?? $order->status,
+            'notes' => array_key_exists('notes', $body) ? (trim($body['notes'] ?? null) ?: null) : $order->notes,
         ]);
+
+        return [
+            'status' => 'success',
+            'message' => 'Order updated successfully!',
+            'data' => $order->fresh()->load('client')
+        ];
     }
 
     /**
-     * Remove the specified order (Soft delete).
+     * Remove the specified order.
      */
-    public function destroy($id): JsonResponse
+    public function destroy($id): array
     {
         $order = Order::findOrFail($id);
         $order->delete();
 
-        return Response::json([
+        return [
             'status' => 'success',
-            'message' => 'Order soft-deleted successfully.'
-        ]);
+            'message' => 'Order deleted successfully.'
+        ];
     }
 }
