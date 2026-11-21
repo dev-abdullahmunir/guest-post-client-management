@@ -57,4 +57,12 @@ class OrderItem extends Model
     {
         return $this->belongsTo(Seller::class, 'vendor_id');
     }
+
+    /**
+     * Payments linked to this post.
+     */
+    public function payments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(\Modules\Shared\Models\Payment::class, 'order_item_id');
+    }
 }
