@@ -25,4 +25,12 @@ class Client extends Model
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * Orders placed by this client.
+     */
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'client_id');
+    }
 }
