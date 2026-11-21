@@ -18,7 +18,8 @@ class ClientDatabaseSeeder extends Seeder
                 'company_name' => 'SaaS Growth Agency',
                 'country' => 'United States',
                 'notes' => 'VIP Buyer - Focused on Tech & AI guest posts.',
-                'created_at' => now(),
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'id' => 2,
@@ -28,7 +29,8 @@ class ClientDatabaseSeeder extends Seeder
                 'company_name' => 'Fintech Flow',
                 'country' => 'United Kingdom',
                 'notes' => 'Requires high DR finance & crypto blogs.',
-                'created_at' => now(),
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
             ],
             [
                 'id' => 3,
@@ -38,7 +40,8 @@ class ClientDatabaseSeeder extends Seeder
                 'company_name' => 'Digital Media Ltd',
                 'country' => 'United States',
                 'notes' => 'Monthly retainer client (5 posts / month).',
-                'created_at' => now(),
+                'created_at' => date('Y-m-d H:i:s'),
+                'updated_at' => date('Y-m-d H:i:s'),
             ],
         ]);
     }
